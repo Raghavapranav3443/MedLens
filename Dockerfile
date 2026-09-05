@@ -5,7 +5,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm install --omit=dev && npm cache clean --force
 
 # Stage 2: build the Next.js standalone output + generate Prisma client.
 FROM node:22-slim AS builder
