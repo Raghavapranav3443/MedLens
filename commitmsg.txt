@@ -1,9 +1,0 @@
-fix: unblock Cloud Run Docker build + complete record workspace UI
-
-Docker: full npm install in deps stage (Prisma CLI is a devDependency and
-postinstall runs prisma generate; --omit=dev broke it with exit 127).
-Record page: render ALL fact kinds (labs/symptoms/medications/allergies/
-conditions/notes), confirm/flag review buttons, regenerate-summary client
-component, full TypeScript typing. Home page: record history list with
-coverage + verified counts. Add CI workflow, glossary data, sync lockfile,
-exclude tests from Next typecheck. 93 unit tests + production build green.
