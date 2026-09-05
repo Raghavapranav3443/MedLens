@@ -1,0 +1,123 @@
+// MedLens — data model (docs/ARCHITECTURE.md §4).
+// Provenance lives in columns (origin, verified, evidenceStart/End, sourceDocId)
+// — never in comments or conventions. Every table cascades from Record so
+// delete-my-data is one statement with no orphans.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id        String   @id // SHA-256 of the opaque cookie token
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  records   Record[]
+}
+
+model Record {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  title     String
+  status    String   @default("draft") // draft | reviewed
+  revision  Int      @default(0) // optimistic concurrency
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sources   SourceDocument[]
+  facts     Fact[]
+  audits    AuditEvent[]
+  summaries Summary[]
+
+  @@index([sessionId, createdAt])
+}
+
+model SourceDocument {
+  id         String    @id @default(cuid())
+  recordId   String
+  record     Record    @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  kind       String // pasted_text | pdf_text
+  rawText    String
+  sha256     String
+  reportedAt DateTime?
+  createdAt  DateTime  @default(now())
+  facts      Fact[]
+
+  @@index([recordId, createdAt])
+}
+
+model Fact {
+  id            String          @id @default(cuid())
+  recordId      String
+  record        Record          @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  sourceDocId   String?
+  sourceDoc     SourceDocument? @relation(fields: [sourceDocId], references: [id])
+  kind          String // lab | symptom | medication | allergy | condition | note
+  rawName       String
+  canonicalName String? // null when unknown — never guessed
+  value         String?
+  unit          String?
+  rangeText     String? // verbatim from source, if reported
+  rangeLow      Float?
+  rangeHigh     Float?
+  status        String? // low | normal | high | unknown | unparseable | qualitative_mismatch | no_reference_provided | null
+  evidenceStart Int?
+  evidenceEnd   Int?
+  origin        String // user | ai | heuristic
+  verified      Boolean         @default(false) // evidence-matched to source
+  review        String          @default("unreviewed") // unreviewed | confirmed | corrected | flagged
+  confidence    Float?
+  corrections   Int             @default(0)
+  meta          Json? // structured intake details (onset, frequency, severity, dose, reaction)
+
+  @@index([recordId, kind])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  recordId  String
+  record    Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  action    String // create | extract | correct | confirm | flag | summarize | delete
+  target    String?
+  before    String?
+  after     String?
+  createdAt DateTime @default(now())
+
+  @@index([recordId, createdAt])
+}
+
+model Summary {
+  id          String   @id @default(cuid())
+  recordId    String
+  record      Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  text        String // server-rendered from audited templates only
+  note        String? // ≤140-char AI connective note (guard-checked) or null
+  planValid   Boolean // false when the deterministic fallback rendered it
+  aiAttempts  Int      @default(0) // actual attempt count, displayed honestly
+  createdAt   DateTime @default(now())
+
+  @@index([recordId, createdAt])
+}
+
+model ExtractionCache {
+  key           String   @id // sha256(normalizedText | promptVersion | model)
+  payload       String // validated extraction JSON
+  model         String
+  promptVersion String
+  createdAt     DateTime @default(now())
+}
+
+model RateLimitCounter {
+  id          String   @id @default(cuid())
+  sessionId   String
+  route       String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@unique([sessionId, route, windowStart])
+  @@index([sessionId, route])
+}
