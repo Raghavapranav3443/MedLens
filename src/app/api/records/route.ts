@@ -5,7 +5,7 @@ import { getOrCreateSessionId } from "@/lib/server/session";
 import { createRecordFromIntake, listRecords } from "@/lib/server/repo";
 import { validationError } from "@/lib/server/errors";
 import { withRoute } from "@/lib/server/route";
-import { createRecordSchema } from "@/lib/validation/request";
+import { createRecordSchema, flattenZod } from "@/lib/validation/request";
 
 export const POST = withRoute(async (req) => {
   const sessionId = await getOrCreateSessionId();

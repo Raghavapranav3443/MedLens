@@ -20,7 +20,7 @@ export type FullRecord = Prisma.RecordGetPayload<{ include: typeof RECORD_INCLUD
 
 /** Create a record from validated intake, stamping every fact origin: user. */
 export async function createRecordFromIntake(sessionId: string, input: IntakeInput) {
-  const factCreates: Prisma.FactCreateInput[] = [
+  const factCreates: Prisma.FactCreateNestedManyWithoutRecordInput["create"] = [
     ...(input.symptoms ?? []).map((s) => ({
       kind: "symptom",
       rawName: s.text,
