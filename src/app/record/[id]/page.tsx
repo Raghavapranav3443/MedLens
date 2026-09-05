@@ -1,18 +1,22 @@
 // Record workspace. Server component; DB errors surface honestly.
+// Renders ALL fact kinds + review buttons + conflicts + gaps + summary + audit + sources.
+
 import { getSessionId } from "@/lib/server/session";
 import { getRecordOrNotFound } from "@/lib/server/repo";
 import { detectConflicts } from "@/lib/engines/conflicts";
 import { detectGaps } from "@/lib/engines/gaps";
+import ReviewButtons from "@/components/ReviewButtons";
+import RegenerateSummaryButton from "@/components/RegenerateSummaryButton";
 
 export const dynamic = "force-dynamic";
 
+type FullRecord = Awaited<ReturnType<typeof getRecordOrNotFound>>;
+type Fact = FullRecord["facts"][number];
+
 const STATUS_LABEL: Record<string, string> = {
-  low: "Below reported range",
-  normal: "Within reported range",
-  high: "Above reported range",
-  unknown: "Value unknown",
-  unparseable: "Range not parseable",
-  qualitative_mismatch: "Qualitative mismatch",
+  low: "Below reported range", normal: "Within reported range",
+  high: "Above reported range", unknown: "Value unknown",
+  unparseable: "Range not parseable", qualitative_mismatch: "Qualitative mismatch",
   no_reference_provided: "No reference range provided",
 };
 
@@ -34,15 +38,46 @@ function StatusChip({ status }: { status: string | null }) {
   );
 }
 
+function OriginChip({ origin, verified }: { origin: string; verified: boolean }) {
+  if (origin === "user") return <span className="text-xs font-medium text-blue-700">You</span>;
+  return verified
+    ? <span className="text-xs font-medium text-emerald-700">Report verified</span>
+    : <span className="text-xs font-medium text-amber-700">Report unverified</span>;
+}
+function FactRow({ f, recordId }: { f: Fact; recordId: string }) {
+  return (
+    <tr className="border-b border-slate-100 align-top">
+      <td className="py-2 pr-2 font-medium text-slate-900">{f.canonicalName ?? f.rawName}</td>
+      <td className="py-2 pr-2 text-slate-700">{f.value ?? "—"}{f.unit ? <span className="text-slate-500"> {f.unit}</span> : ""}</td>
+      <td className="py-2 pr-2 text-slate-500">{f.rangeText ?? "—"}</td>
+      <td className="py-2 pr-2">{f.status ? <StatusChip status={f.status} /> : <span className="text-xs text-slate-400">—</span>}</td>
+      <td className="py-2 pr-2"><OriginChip origin={f.origin} verified={f.verified} /></td>
+      <td className="py-2"><ReviewButtons factId={f.id} recordId={recordId} /></td>
+    </tr>
+  );
+}
 
+function FactSection({ title, facts, recordId }: { title: string; facts: Fact[]; recordId: string }) {
+  if (!facts.length) return null;
+  return (
+    <section className="mb-4">
+      <h3 className="mb-1 text-sm font-semibold text-slate-800">{title} <span className="text-xs font-normal text-slate-400">({facts.length})</span></h3>
+      <table className="w-full text-sm">
+        <thead><tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+          <th className="py-1 pr-2">Name</th><th className="py-1 pr-2">Value</th><th className="py-1 pr-2">Range</th><th className="py-1 pr-2">Status</th><th className="py-1 pr-2">Source</th><th className="py-1">Review</th>
+        </tr></thead>
+        <tbody>{facts.map((f) => <FactRow key={f.id} f={f} recordId={recordId} />)}</tbody>
+      </table>
+    </section>
+  );
+}
 export default async function RecordPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const sessionId = await getSessionId();
   if (!sessionId) return <Notice title="Record" msg="No session found. Create a record from the home page first." />;
 
-  let record;
-  try { record = await getRecordOrNotFound(sessionId, id); }
-  catch { return <Notice title="Record" msg="This record could not be loaded. It may belong to a different session, or the database is not configured." />; }
+  const record = await getRecordOrNotFound(sessionId, id).catch(() => null);
+  if (!record) return <Notice title="Record" msg="This record could not be loaded. It may belong to a different session, or the database is not configured." />;
 
   const conflicts = detectConflicts({
     facts: record.facts,
@@ -51,7 +86,13 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
     intakeMedications: record.facts.filter((f) => f.kind === "medication").map((f) => f.rawName),
   });
   const gaps = detectGaps(record.facts);
+
   const labs = record.facts.filter((f) => f.kind === "lab");
+  const symptoms = record.facts.filter((f) => f.kind === "symptom");
+  const medications = record.facts.filter((f) => f.kind === "medication");
+  const allergies = record.facts.filter((f) => f.kind === "allergy");
+  const conditions = record.facts.filter((f) => f.kind === "condition");
+  const notes = record.facts.filter((f) => f.kind === "note");
   const quarantined = labs.filter((f) => !f.verified);
   const coverage = labs.length === 0 ? 0 : Math.round(((labs.length - quarantined.length) / labs.length) * 100);
   const latestSummary = record.summaries[0] ?? null;
@@ -61,7 +102,7 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{record.title}</h1>
-          <p className="mt-1 text-sm text-slate-500">Revision {record.revision} · {labs.length} lab rows · verification coverage <span className="font-semibold text-slate-700">{coverage}%</span></p>
+          <p className="mt-1 text-sm text-slate-500">Revision {record.revision} · {record.facts.length} facts · coverage <span className="font-semibold text-slate-700">{coverage}%</span></p>
         </div>
         <a href={"/record/" + id + "/print"} target="_blank" rel="noopener" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 print:hidden">Print one-pager</a>
       </div>
@@ -82,33 +123,36 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
           </ul>
         </section>
       )}
-
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="labs-heading">
-          <h2 id="labs-heading" className="text-base font-semibold text-slate-900">Labs</h2>
-          {labs.length === 0 ? <p className="mt-3 text-sm text-slate-500">No lab rows extracted yet.</p> : (
-            <table className="mt-3 w-full text-sm">
-              <thead><tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-2">Analyte</th><th className="py-2 pr-2">Value</th><th className="py-2 pr-2">Range</th><th className="py-2 pr-2">Status</th><th className="py-2">Source</th></tr></thead>
-              <tbody>
-                {labs.map((f) => (
-                  <tr key={f.id} className="border-b border-slate-100 align-top">
-                    <td className="py-2 pr-2 font-medium text-slate-900">{f.rawName}</td>
-                    <td className="py-2 pr-2 text-slate-700">{f.value ?? "—"}{f.unit ? <span className="text-slate-500"> {f.unit}</span> : ""}</td>
-                    <td className="py-2 pr-2 text-slate-500">{f.rangeText ?? "—"}</td>
-                    <td className="py-2 pr-2"><StatusChip status={f.status} /></td>
-                    <td className="py-2 text-xs text-slate-500">{f.verified ? <span className="text-emerald-700">✓ verified</span> : <span className="text-amber-700">⚠ quarantined</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div className="lg:col-span-2 space-y-2">
+          <FactSection title="Labs" facts={labs} recordId={id} />
+          <FactSection title="Symptoms" facts={symptoms} recordId={id} />
+          <FactSection title="Medications" facts={medications} recordId={id} />
+          <FactSection title="Allergies" facts={allergies} recordId={id} />
+          <FactSection title="Conditions" facts={conditions} recordId={id} />
+          <FactSection title="Notes" facts={notes} recordId={id} />
+
           {quarantined.length > 0 && (
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-xs font-semibold text-amber-900">Quarantined ({quarantined.length})</p>
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-semibold text-amber-900">Quarantined — not verified against the source ({quarantined.length})</p>
               <p className="mt-0.5 text-xs text-amber-800">Excluded from summaries until confirmed. Nothing silently trusted; nothing silently dropped.</p>
             </div>
           )}
-        </section>
+
+          {record.sources.length > 0 && (
+            <section className="mt-4">
+              <h2 className="text-base font-semibold text-slate-900">Source documents</h2>
+              <div className="mt-2 space-y-2">
+                {record.sources.map((s) => (
+                  <details key={s.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-slate-700">Source · {s.kind} · {s.sha256.slice(0, 8)}</summary>
+                    <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-600">{s.rawText}</pre>
+                  </details>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
 
         <aside className="space-y-4">
           {gaps.length > 0 && (
@@ -120,12 +164,12 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="summary-heading">
             <h2 id="summary-heading" className="text-sm font-semibold text-slate-900">Summary</h2>
             {latestSummary ? <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{latestSummary.text}</div> : <p className="mt-2 text-sm text-slate-500">No summary yet.</p>}
-            <button onClick={() => fetch("/api/records/" + id + "/summary", { method: "POST" })} className="mt-3 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-slate-800">Regenerate summary</button>
+            <RegenerateSummaryButton recordId={id} />
           </section>
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="audit-heading">
             <h2 id="audit-heading" className="text-sm font-semibold text-slate-900">Audit trail</h2>
             {record.audits.length === 0 ? <p className="mt-2 text-sm text-slate-500">No audit events.</p> : (
-              <ul className="mt-2 space-y-1 text-xs text-slate-600">{record.audits.slice(0, 10).map((a) => <li key={a.id}><span className="font-medium text-slate-700">{a.action}</span> · {new Date(a.createdAt).toLocaleString()}{a.after ? " — " + a.after : ""}</li>)}</ul>
+              <ul className="mt-2 space-y-1 text-xs text-slate-600">{record.audits.slice(0, 15).map((a) => <li key={a.id}><span className="font-medium text-slate-700">{a.action}</span> · {new Date(a.createdAt).toLocaleString()}{a.after ? " — " + a.after : ""}</li>)}</ul>
             )}
           </section>
         </aside>

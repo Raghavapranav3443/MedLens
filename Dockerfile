@@ -1,11 +1,11 @@
 # Cloud Run (free tier) multi-stage build for MedLens.
-# Stage 1: install deps (incl. Prisma CLI) so we can generate the client.
+# Stage 1: install ALL deps (Prisma CLI is a devDependency and postinstall
+# runs `prisma generate`; the runtime image below never receives dev deps).
 FROM node:22-slim AS deps
 WORKDIR /app
-ENV NODE_ENV=production
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install && npm cache clean --force
 
 # Stage 2: build the Next.js standalone output + generate Prisma client.
 FROM node:22-slim AS builder
