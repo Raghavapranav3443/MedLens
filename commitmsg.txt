@@ -1,1 +1,14 @@
-chore: switch default Groq model to openai/gpt-oss-120b (llama-3.3-70b retired), add smoke-test scripts
+feat: complete end-to-end build — conflicts R1-R8, gaps, comparison, aliases, summary plan+template, degraded regex mode, print view, superior UI
+
+Implements the full documented feature set:
+- conflicts.ts: R1-R8 deterministic detection, each rule cites both sides, flags without resolving
+- gaps.ts: clarification questions derived from structured record, max 5 prioritized, trigger-cited
+- compare.ts: longitudinal comparison with status transitions, unit conversion (exact factors only), bound-crossing sort
+- aliases.ts: curated ~60 analyte map, case/punctuation-insensitive, unknowns never guessed
+- summary.ts: plan-and-template rendering, server writes every sentence, deterministic fallback, structurally safe
+- summary route: Groq plan call + server render, never a regeneration loop, 429/503 typed errors
+- degraded regex extractor fallback when AI unavailable
+- record/[id] page: labs table + conflicts flags + gaps + summary panel + audit trail + print view + quarantine section
+- print route: one-pager with coverage meter, provenance, disclaimer
+- superior UI throughout: accessible, color+text statuses, ARIA labels, semantic landmarks
+- 68 unit tests passing, production build green (9 routes)

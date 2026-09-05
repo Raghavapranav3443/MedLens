@@ -1,4 +1,6 @@
-// POST /api/records/:id/summary — Groq plan + server-rendered summary.
+import { writeFileSync } from "node:fs";
+
+const content = `// POST /api/records/:id/summary — Groq plan + server-rendered summary.
 // The model returns a plan (factIds/templateIds + ≤140-char note); the server
 // renders every sentence from audited templates. Invalid/failed → deterministic
 // fallback. Never a regeneration loop.
@@ -27,7 +29,7 @@ export const POST = withRoute(async (_req, ctx) => {
   try {
     const { data, attempts } = await chatJson({
       system:
-        "You are a summary planner. Return JSON: {\"sections\":[\"overview\",\"labs\"],\"note\":\"<=140 char connective phrase or omit\"}. No medical interpretation.",
+        "You are a summary planner. Return JSON: {\\"sections\\":[\\"overview\\",\\"labs\\"],\\"note\\":\\"<=140 char connective phrase or omit\\"}. No medical interpretation.",
       user: summaryPlanUser(record.facts),
       json: true,
     });
@@ -54,3 +56,7 @@ export const POST = withRoute(async (_req, ctx) => {
 
   return Response.json({ summary, planUsed: usedFallback ? "fallback" : "ai" });
 });
+`;
+
+writeFileSync("src/app/api/records/[id]/summary/route.ts", content);
+console.log("summary route written");

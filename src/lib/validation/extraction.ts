@@ -17,3 +17,10 @@ export const extractionResponseSchema = z.object({
 });
 
 export type ExtractionRow = z.infer<typeof extractionRowSchema>;
+
+// Summary plan: model returns sections + an optional bounded note.
+export const summaryPlanSchema = z.object({
+  sections: z.array(z.enum(["overview", "labs", "symptoms", "medications"])).max(6).optional().default(["overview", "labs"]),
+  note: z.string().max(140).optional(),
+});
+

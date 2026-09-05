@@ -18,3 +18,13 @@ export const extractionSystem = [
 export function extractionUser(maskedText: string): string {
   return `Report text:\n<<<\n${maskedText}\n>>>`;
 }
+
+export function summaryPlanUser(facts: { rawName: string; value: string | null; status: string | null }[]): string {
+  const lines = facts
+    .filter((f) => f.value != null)
+    .slice(0, 50)
+    .map((f) => `- ${f.rawName}: ${f.value} [${f.status ?? "unknown"}]`)
+    .join("\n");
+  return `Verified facts:\n${lines}\n\nChoose which summary sections to include and optionally write a <=140 char connective note.`;
+}
+
