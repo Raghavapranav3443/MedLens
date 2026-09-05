@@ -65,9 +65,9 @@ export function parseValue(
 
 /** Pull the first number out of a range fragment like "13.0 g/dL" or "< 200". */
 function number(s: string): number | null {
-  const m = s.match(/-?\d+(?:[.,]\d+)?/);
+  const m = s.match(/-?\d[\d.,]*/);
   if (!m) return null;
-  const n = Number(m[0].replace(",", "."));
+  const n = Number(m[0].replace(/,/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 
@@ -86,21 +86,23 @@ export function parseRangeText(raw: string | null | undefined): ParsedRange | nu
   if (POSITIVE_TOKENS.has(low)) return { type: "qualitative", polarity: "positive", raw: s };
 
   // Upper bounds: < 200, <= 5.7, ≤ 5.7, up to 150
-  const upper = s.match(/^(?:<=?\s*|≤\s*|up\s+to\s+)([0-9]+(?:[.,][0-9]+)?)/i);
+  const upper = s.match(/^(?:<=?\s*|≤\s*|up\s+to\s+)([0-9][0-9.,]*)/i);
   if (upper) {
     const high = number(upper[1]);
     if (high !== null) return { type: "upper", high, raw: s };
   }
 
   // Lower bounds: > 40, >= 60, ≥ 60
-  const lower = s.match(/^(?:>=?\s*|≥\s*)([0-9]+(?:[.,][0-9]+)?)/);
+  const lower = s.match(/^(?:>=?\s*|≥\s*)([0-9][0-9.,]*)/);
   if (lower) {
     const lo = number(lower[1]);
     if (lo !== null) return { type: "lower", low: lo, raw: s };
   }
 
-  // Closed intervals: 13.0 - 17.0, 13–17, 13 to 17, 13.0-17.0
-  const closed = s.match(/^([0-9]+(?:[.,][0-9]+)?)\s*(?:-|–|—|to)\s*([0-9]+(?:[.,][0-9]+)?)$/i);
+  // Closed intervals: 13.0 - 17.0, 13–17, 13 to 17, 1,200 - 4,500
+  const closed = s.match(
+    /^([0-9][0-9.,]*)\s*(?:-|–|—|to)\s*([0-9][0-9.,]*)$/i,
+  );
   if (closed) {
     const a = number(closed[1]);
     const b = number(closed[2]);
