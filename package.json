@@ -16,7 +16,6 @@
     "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
-    "@google/genai": "^2.21.0",
     "@prisma/client": "^6.19.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

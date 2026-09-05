@@ -5,6 +5,9 @@ import { getSessionId } from "@/lib/server/session";
 import { getRecordOrNotFound } from "@/lib/server/repo";
 import { detectConflicts } from "@/lib/engines/conflicts";
 import { detectGaps } from "@/lib/engines/gaps";
+import { compareFacts, type Comparison } from "@/lib/engines/compare";
+import { lookupGlossary } from "@/lib/data/glossary";
+import { listRecords } from "@/lib/server/repo";
 import ReviewButtons from "@/components/ReviewButtons";
 import RegenerateSummaryButton from "@/components/RegenerateSummaryButton";
 
@@ -47,7 +50,20 @@ function OriginChip({ origin, verified }: { origin: string; verified: boolean })
 function FactRow({ f, recordId }: { f: Fact; recordId: string }) {
   return (
     <tr className="border-b border-slate-100 align-top">
-      <td className="py-2 pr-2 font-medium text-slate-900">{f.canonicalName ?? f.rawName}</td>
+      <td className="py-2 pr-2 font-medium text-slate-900">
+        {(() => {
+          const g = lookupGlossary(f.canonicalName ?? f.rawName);
+          const name = f.canonicalName ?? f.rawName;
+          return g ? (
+            <details className="inline">
+              <summary className="cursor-pointer list-none underline decoration-dotted underline-offset-2">{name}</summary>
+              <span className="mt-1 block max-w-xs rounded border border-slate-200 bg-white p-2 text-xs font-normal text-slate-600 shadow">
+                <strong>{g.term}:</strong> {g.definition}
+              </span>
+            </details>
+          ) : name;
+        })()}
+      </td>
       <td className="py-2 pr-2 text-slate-700">{f.value ?? "—"}{f.unit ? <span className="text-slate-500"> {f.unit}</span> : ""}</td>
       <td className="py-2 pr-2 text-slate-500">{f.rangeText ?? "—"}</td>
       <td className="py-2 pr-2">{f.status ? <StatusChip status={f.status} /> : <span className="text-xs text-slate-400">—</span>}</td>
@@ -97,6 +113,12 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
   const coverage = labs.length === 0 ? 0 : Math.round(((labs.length - quarantined.length) / labs.length) * 100);
   const latestSummary = record.summaries[0] ?? null;
 
+  // Longitudinal comparison vs the most recent prior record (deterministic,
+  // no AI). Prior record must be owner-scoped — listRecords guarantees that.
+  const allRecords = await listRecords(sessionId);
+  const prior = allRecords.find((r) => r.id !== id && r.createdAt < record.createdAt) ?? null;
+  const comparisons: Comparison[] = prior ? compareFacts(prior.facts as Fact[], record.facts) : [];
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -118,6 +140,35 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
                   <span className="font-medium text-slate-900">{c.message}</span>
                 </div>
                 <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">{c.cites.map((cite, j) => <li key={j}>{cite}</li>)}</ul>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {comparisons.length > 0 && (
+        <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="compare-heading">
+          <h2 id="compare-heading" className="text-sm font-semibold text-slate-900">
+            Changes vs previous report <span className="font-normal text-slate-400">(“{prior!.title}”)</span>
+          </h2>
+          <ul className="mt-2 space-y-1 text-sm">
+            {comparisons.map((c) => (
+              <li key={c.analyte} className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-1">
+                <span className="font-medium text-slate-900">{c.analyte}</span>
+                {c.note ? (
+                  <span className="text-xs text-slate-500">{c.note}</span>
+                ) : c.delta === null ? (
+                  <span className="text-xs text-slate-500">No prior value — could not be compared.</span>
+                ) : (
+                  <>
+                    <span className={c.direction === "increased" ? "text-amber-700" : c.direction === "decreased" ? "text-sky-700" : "text-slate-500"}>
+                      {c.direction === "increased" ? "▲" : c.direction === "decreased" ? "▼" : "•"} {c.previousValue} → {c.currentValue} {c.currentUnit ?? ""}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {c.delta > 0 ? "+" : ""}{c.delta}{c.deltaPct !== null ? ` (${c.deltaPct > 0 ? "+" : ""}${c.deltaPct}%)` : ""}
+                    </span>
+                    <span className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-slate-600">{c.statusTransition}</span>
+                  </>
+                )}
               </li>
             ))}
           </ul>
