@@ -1,1 +1,0 @@
-Groq extraction pipeline: masking, evidence validation, extraction cache, record page, write-time status derivation
