@@ -116,8 +116,10 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
   // Longitudinal comparison vs the most recent prior record (deterministic,
   // no AI). Prior record must be owner-scoped — listRecords guarantees that.
   const allRecords = await listRecords(sessionId);
-  const prior = allRecords.find((r) => r.id !== id && r.createdAt < record.createdAt) ?? null;
-  const comparisons: Comparison[] = prior ? compareFacts(prior.facts as Fact[], record.facts) : [];
+  const priorMeta = allRecords.find((r) => r.id !== id && r.createdAt < record.createdAt) ?? null;
+  const prior = priorMeta ? await getRecordOrNotFound(sessionId, priorMeta.id) : null;
+  const priorTitle = prior?.title ?? "";
+  const comparisons: Comparison[] = prior ? compareFacts(prior.facts, record.facts) : [];
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
@@ -148,7 +150,7 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
       {comparisons.length > 0 && (
         <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="compare-heading">
           <h2 id="compare-heading" className="text-sm font-semibold text-slate-900">
-            Changes vs previous report <span className="font-normal text-slate-400">(“{prior!.title}”)</span>
+            Changes vs previous report <span className="font-normal text-slate-400">(“{priorTitle}”)</span>
           </h2>
           <ul className="mt-2 space-y-1 text-sm">
             {comparisons.map((c) => (

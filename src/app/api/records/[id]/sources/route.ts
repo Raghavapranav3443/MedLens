@@ -19,6 +19,10 @@ async function pdfToText(file: File): Promise<string> {
     throw payloadTooLarge("PDF exceeds the 5 MiB limit.");
   }
   const buf = new Uint8Array(await file.arrayBuffer());
+  // Magic-byte sniffing (docs/PRD.md §4.2) — never trust Content-Type alone.
+  if (buf.length < 5 || buf[0] !== 0x25 || buf[1] !== 0x50 || buf[2] !== 0x44 || buf[3] !== 0x46 || buf[4] !== 0x2d) {
+    throw validationError("This file is not a valid PDF.");
+  }
   const { getDocumentProxy, extractText } = await import("unpdf");
   let pdf, totalPages, text;
   try {

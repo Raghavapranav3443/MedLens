@@ -1,0 +1,11 @@
+chore: code-quality pass — remove type lies, dead assets; add compare/glossary tests
+
+- record page: fetch the full prior record instead of casting a partial
+  select (removes `as Fact[]`); replace `prior!` non-null assertion with
+  an explicit `priorTitle` binding
+- db.ts: idiomatic `declare global` instead of `as unknown as`
+- sources: PDF magic-byte sniffing before parse (never trust Content-Type)
+- remove 5 unused Next template SVGs from public/
+- new tests: compareFacts (9 — unit conversion, could-not-be-compared,
+  canonical-name joins, bound-crossing sort) + glossary (4)
+- 106/106 tests across 10 files; production build green (12 routes)
