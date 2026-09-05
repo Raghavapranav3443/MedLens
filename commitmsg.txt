@@ -1,0 +1,1 @@
+chore: switch default Groq model to openai/gpt-oss-120b (llama-3.3-70b retired), add smoke-test scripts

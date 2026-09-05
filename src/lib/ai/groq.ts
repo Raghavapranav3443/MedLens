@@ -12,7 +12,7 @@ const TIMEOUT_MS = 30_000;
 const MAX_OUTPUT_TOKENS = 4096;
 
 export function groqModel(): string {
-  return process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  return process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 }
 
 export function hasGroqKey(): boolean {
@@ -41,6 +41,8 @@ async function chatOnce(opts: ChatOptions): Promise<{ ok: true; content: string 
         model: groqModel(),
         temperature: 0,
         max_tokens: MAX_OUTPUT_TOKENS,
+        // gpt-oss models are reasoning models; low effort keeps tokens for JSON.
+        reasoning_effort: "low",
         ...(opts.json ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: opts.system },
