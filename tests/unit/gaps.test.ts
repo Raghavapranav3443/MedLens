@@ -1,0 +1,40 @@
+import { detectGaps } from "@/lib/engines/gaps";
+
+function fact(id, kind, rawName, value) {
+  return { id, kind, rawName, value };
+}
+
+describe("detectGaps", () => {
+  it("asks for onset of symptoms with no value", () => {
+    const gaps = detectGaps([fact("f1", "symptom", "Headache", null)]);
+    expect(gaps.some((g) => g.question.toLowerCase().includes("onset"))).toBe(true);
+  });
+
+  it("asks for dose of medications with no value", () => {
+    const gaps = detectGaps([fact("f1", "medication", "Metformin", null)]);
+    expect(gaps.some((g) => g.question.toLowerCase().includes("dose"))).toBe(true);
+  });
+
+  it("asks to compare lab values against prior reports", () => {
+    const gaps = detectGaps([fact("f1", "lab", "Glucose", "95")]);
+    expect(gaps.some((g) => g.question.toLowerCase().includes("changed"))).toBe(true);
+  });
+
+  it("caps at 5 questions max", () => {
+    const facts = Array.from({ length: 10 }, (_, i) => fact("f" + i, "symptom", "Symptom" + i, null));
+    expect(detectGaps(facts).length).toBeLessThanOrEqual(5);
+  });
+
+  it("prioritizes questions (lower number = higher priority)", () => {
+    const gaps = detectGaps([fact("f1", "lab", "Glucose", "95"), fact("f2", "symptom", "Headache", null)]);
+    expect(gaps[0].priority).toBeLessThanOrEqual(gaps[1].priority);
+  });
+
+  it("each gap has a trigger citation and id", () => {
+    const gaps = detectGaps([fact("f1", "symptom", "Headache", null)]);
+    for (const g of gaps) {
+      expect(g.trigger.length).toBeGreaterThan(0);
+      expect(g.id.length).toBeGreaterThan(0);
+    }
+  });
+});

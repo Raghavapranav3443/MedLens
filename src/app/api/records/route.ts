@@ -5,10 +5,12 @@ import { getOrCreateSessionId } from "@/lib/server/session";
 import { createRecordFromIntake, listRecords } from "@/lib/server/repo";
 import { validationError } from "@/lib/server/errors";
 import { withRoute } from "@/lib/server/route";
+import { enforceRateLimit } from "@/lib/server/ratelimit";
 import { createRecordSchema, flattenZod } from "@/lib/validation/request";
 
 export const POST = withRoute(async (req) => {
   const sessionId = await getOrCreateSessionId();
+  await enforceRateLimit(sessionId, "create_record");
   const parsed = createRecordSchema.safeParse(await req.json());
   if (!parsed.success) {
     throw validationError("Invalid intake payload.", flattenZod(parsed.error));

@@ -1,1 +1,11 @@
-chore: remove file-writing helper scripts
+feat: wire core fixes + degraded mode + full intake + 93 tests
+
+- health: GROQ_ env vars + live DB ping (always HTTP 200)
+- extract: regex degraded fallback on AI failure (origin: heuristic, quarantined)
+- extract: wire resolveAlias -> canonicalName (activates R2 + compare)
+- ratelimit: enforceRateLimit on POST /api/records
+- intake: full form (sex, symptoms, conditions, allergies, meds, consent)
+- record/[id]/print: one-pager (kills the 404)
+- next.config: output standalone + security headers
+- Dockerfile + .dockerignore for Cloud Run
+- tests: +25 (68 -> 93) covering aliases, conflicts R1-R8, gaps, regex

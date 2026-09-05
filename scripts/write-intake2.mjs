@@ -1,78 +1,5 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-
-const DEMO_REPORT = `COMPLETE BLOOD COUNT — SYNTHETIC SAMPLE
-Hemoglobin 10.2 g/dL (13.0 - 17.0)
-WBC 8,400 /uL (4,000 - 11,000)
-Platelets 210,000 /uL (150,000 - 450,000)`;
-
-function parseList(raw: string): string[] {
-  return raw.split("\n").map((s) => s.trim()).filter(Boolean);
-}
-
-export default function IntakeForm() {
-  const router = useRouter();
-  const [title, setTitle] = useState("Demo record");
-  const [age, setAge] = useState("34");
-  const [sex, setSex] = useState("");
-  const [report, setReport] = useState(DEMO_REPORT);
-  const [conditions, setConditions] = useState("");
-  const [allergies, setAllergies] = useState("");
-  const [medications, setMedications] = useState("");
-  const [symptoms, setSymptoms] = useState("");
-  const [noKnownAllergies, setNoKnownAllergies] = useState(true);
-  const [consent, setConsent] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [stage, setStage] = useState("");
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!consent) { setError("Please confirm the data-use notice before continuing."); return; }
-    setBusy(true);
-    setError(null);
-    try {
-      setStage("Creating record…");
-      const res = await fetch("/api/records", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          ...(age !== "" ? { age: Number(age) } : {}),
-          ...(sex ? { sex } : {}),
-          ...(symptoms.trim() ? { symptoms: parseList(symptoms).map((text) => ({ text })) } : {}),
-          ...(conditions.trim() ? { conditions: parseList(conditions) } : {}),
-          ...(allergies.trim() ? { allergies: parseList(allergies).map((substance) => ({ substance })) } : {}),
-          ...(medications.trim() ? { medications: parseList(medications).map((name) => ({ name })) } : {}),
-          noKnownAllergies,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        const fields = body?.error?.fieldErrors ? Object.values(body.error.fieldErrors).join("; ") : "";
-        setError(`\${body?.error?.code ?? res.status}: \${body?.error?.message ?? "Request failed"} \${fields}`.trim());
-        return;
-      }
-      const recordId: string = body.record.id;
-      if (report.trim() !== "") {
-        setStage("Extracting report rows…");
-        const srcRes = await fetch(`/api/records/\${recordId}/sources`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind: "pasted_text", text: report }),
-        });
-        const srcBody = await srcRes.json();
-        if (!srcRes.ok) { setError(`\${srcBody?.error?.code ?? srcRes.status}: \${srcBody?.error?.message ?? "Extraction failed"}`); return; }
-        setStage(`Extracted \${srcBody.rowCount} rows (\${srcBody.verifiedCount} verified, \${srcBody.quarantined} quarantined).`);
-      }
-      router.push(`/record/\${recordId}`);
-    } catch { setError("Network error."); }
-    finally { setBusy(false); setStage(""); }
-  }
-
+import { appendFileSync } from "node:fs";
+const content = String.raw`
 
   return (
     <form onSubmit={submit} className="space-y-4" aria-describedby="intake-help">
@@ -135,18 +62,6 @@ export default function IntakeForm() {
           </div>
         </fieldset>
       )}
-
-      <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-        <input id="consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1" />
-        <label htmlFor="consent" className="text-sm text-amber-900">
-          I confirm this is synthetic/demo data. MedLens organizes records only — it does not diagnose, prescribe, or replace a clinician.
-        </label>
-      </div>
-      {error && (<p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>)}
-      {stage && !error && (<p aria-live="polite" className="text-sm text-gray-600">{stage}</p>)}
-      <button type="submit" disabled={busy || !consent} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow hover:bg-gray-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2">
-        {busy ? "Working…" : "Create record & extract"}
-      </button>
-    </form>
-  );
-}
+`;
+appendFileSync("src/components/IntakeForm.tsx", content);
+console.log("intake part2");

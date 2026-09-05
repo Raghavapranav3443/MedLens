@@ -32,3 +32,24 @@ export async function enforceAiRateLimit(sessionId: string, route: string): Prom
     throw rateLimited((windowEnd - Date.now()) / 1000);
   }
 }
+
+/**
+ * General per-session rate limit for non-AI mutating routes (record creation,
+ * updates). Separate, more generous window so legitimate use is never blocked.
+ */
+const MUTATION_WINDOW_SECONDS = 60;
+const MUTATION_LIMIT = Number(process.env.MUTATION_RATE_LIMIT ?? 30);
+
+export async function enforceRateLimit(sessionId: string, route: string): Promise<void> {
+  const ws = new Date(Math.floor(Date.now() / (MUTATION_WINDOW_SECONDS * 1000)) * MUTATION_WINDOW_SECONDS * 1000);
+  const counter = await prisma.rateLimitCounter.upsert({
+    where: { sessionId_route_windowStart: { sessionId, route, windowStart: ws } },
+    create: { sessionId, route, windowStart: ws, count: 1 },
+    update: { count: { increment: 1 } },
+  });
+  if (counter.count > MUTATION_LIMIT) {
+    const windowEnd = ws.getTime() + MUTATION_WINDOW_SECONDS * 1000;
+    throw rateLimited((windowEnd - Date.now()) / 1000);
+  }
+}
+

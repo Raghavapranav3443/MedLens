@@ -1,0 +1,15 @@
+# Build outputs and local-only files never belong in the Cloud Run image.
+node_modules
+.next
+.env
+.env.local
+.env*.local
+.git
+.github
+docs
+tests
+scripts
+*.log
+.freebuff
+.commitmsg.tmp
+deploy.log
