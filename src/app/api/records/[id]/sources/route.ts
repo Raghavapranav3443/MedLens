@@ -1,14 +1,15 @@
-// POST /api/records/:id/sources — add pasted text (PDF path lands in Phase 2).
-// Failure modes: 401, 404, 413, 422, 429. Caps are enforced BEFORE anything else.
+// POST /api/records/:id/sources — add pasted text and run the extraction
+// pipeline. Failure modes: 401, 404, 413, 422, 429, 503.
+// Caps are enforced BEFORE parsing or any AI call.
 
 import { requireSessionId } from "@/lib/server/session";
 import { getRecordOrNotFound } from "@/lib/server/repo";
 import { payloadTooLarge, validationError } from "@/lib/server/errors";
 import { withRoute } from "@/lib/server/route";
 import { enforceAiRateLimit } from "@/lib/server/ratelimit";
-import { addSourceSchema } from "@/lib/validation/request";
+import { addSourceSchema, flattenZod } from "@/lib/validation/request";
 import { MAX_SOURCE_CHARS } from "@/lib/ingest/limits";
-import { flattenZod } from "@/lib/validation/request";
+import { extractAndPersist } from "@/lib/server/extract";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -18,15 +19,15 @@ export const POST = withRoute(async (req, ctx) => {
   await getRecordOrNotFound(sessionId, id);
   await enforceAiRateLimit(sessionId, "sources");
 
-  // Cap the body size before buffering without bound (doc'd: 40,000 chars).
-  const text = await req.text();
-  if (text.length > MAX_SOURCE_CHARS + 2048) {
+  // Cap the body size before buffering without bound.
+  const body = await req.text();
+  if (body.length > MAX_SOURCE_CHARS + 2048) {
     throw payloadTooLarge(`Report text exceeds ${MAX_SOURCE_CHARS} characters.`);
   }
 
   let json: unknown;
   try {
-    json = JSON.parse(text);
+    json = JSON.parse(body);
   } catch {
     throw validationError("Body must be JSON.");
   }
@@ -35,7 +36,22 @@ export const POST = withRoute(async (req, ctx) => {
     throw validationError("Invalid source payload.", flattenZod(parsed.error));
   }
 
-  // Phase 2 will run: masking → extraction (cache/AI) → evidence validation →
-  // transaction persist. The skeleton validates + acknowledges for now.
-  return Response.json({ received: true, kind: parsed.data.kind }, { status: 202 });
+  const outcome = await extractAndPersist(sessionId, id, {
+    text: parsed.data.text,
+    ...(parsed.data.reportedAt ? { reportedAt: new Date(parsed.data.reportedAt) } : {}),
+  });
+
+  return Response.json(
+    {
+      sourceDocId: outcome.facts[0]?.sourceDocId ?? null,
+      rowCount: outcome.facts.length,
+      verifiedCount: outcome.facts.length - outcome.quarantined,
+      quarantined: outcome.quarantined,
+      cacheHit: outcome.cacheHit,
+      aiAttempts: outcome.aiAttempts,
+      facts: outcome.facts,
+    },
+    { status: 201 },
+  );
 });
+
